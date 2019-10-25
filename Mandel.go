@@ -22,8 +22,10 @@ var (
 			image.Point{0, 0},
 			image.Point{image_width, image_height},
 		})}
-	wg sync.WaitGroup
-	q  = make(chan int, 2000)
+	wg               sync.WaitGroup
+	bailout_radius   float64 = 20
+	max_worker_count         = 2
+	q                        = make(chan int, image_height)
 )
 
 type ComplexPoint struct {
@@ -61,7 +63,7 @@ func mandelbrot(point *ComplexPoint) *ComplexPoint {
 	for iter := 1; ; iter++ {
 		zz = zz*zz + c
 		point.iterations = iter
-		if cmplx.Abs(zz) > 20 {
+		if cmplx.Abs(zz) > bailout_radius {
 			return point
 		}
 		if iter == max_iter {
@@ -109,7 +111,7 @@ func main() {
 		q <- h
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < max_worker_count; i++ {
 		wg.Add(1)
 		go renderline()
 	}
