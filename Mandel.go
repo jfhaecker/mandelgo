@@ -13,7 +13,7 @@ import (
 
 var (
 	top_left     = complex(-2, 1)
-	bottom_right = complex(2, -1)
+	bottom_right = complex(1, -1)
 	image_width  = 1000
 	image_height = 1000
 	max_iter     = 1000
@@ -23,9 +23,11 @@ var (
 			image.Point{image_width, image_height},
 		})}
 	wg               sync.WaitGroup
-	bailout_radius   float64 = 20
-	max_worker_count         = 2
+	bailout_radius   float64 = 200
+	max_worker_count         = 4
 	q                        = make(chan int, image_height)
+	colorIndex       int
+	colorsN          int = 255
 )
 
 type ComplexPoint struct {
@@ -36,7 +38,7 @@ type ComplexPoint struct {
 type SyncImage struct {
 	lock  *sync.Mutex
 	image *image.RGBA
-}
+/}
 
 func (l SyncImage) Set(x, y int, color color.Color) {
 	l.lock.Lock()
@@ -72,6 +74,13 @@ func mandelbrot(point *ComplexPoint) *ComplexPoint {
 	}
 }
 
+func getColor(index int) color.RGBA {
+	//qu := quake[97 : 97+16]
+	qu := quake[0:colorsN]
+	//	return qu[index%(len(qu)-1)]
+	return qu[(index+colorIndex)%(colorsN-1)]
+}
+
 func renderline() {
 
 	h := 0
@@ -83,18 +92,21 @@ func renderline() {
 
 		for w := 0; w < image_width; w++ {
 
-			_real := linspace(real(top_left), real(bottom_right),
+			real := linspace(real(top_left), real(bottom_right),
 				image_width, w)
-			_imag := linspace(imag(top_left), imag(bottom_right),
+			imag := linspace(imag(top_left), imag(bottom_right),
 				image_height, h)
 
-			z := complex(_real, _imag)
+			z := complex(real, imag)
 			point := mandelbrot(&ComplexPoint{z: z, iterations: 0})
 			co := color.RGBA{0, 0, 0, 0}
 			if point.iterations == max_iter {
 				co = color.RGBA{255, 255, 255, 255}
 			} else {
-				co = color.RGBA{0, 0, 0, 255}
+				c := uint8(colorIndex)
+				co = color.RGBA{c, 0, c,255}
+				// co = getColor(point.iterations)
+				//co = color.RGBA{139, 139, 130, 255}
 			}
 			sync_image.Set(w, h, co)
 		}
@@ -107,15 +119,22 @@ func main() {
 	fmt.Printf("runtime.GOMAXPROCS:%v\n", runtime.GOMAXPROCS(0))
 	fmt.Println("der haex kann das mandeln nicht lassen...")
 
-	for h := 0; h < image_height; h++ {
-		q <- h
-	}
+	for x := 0; x < colorsN; x++ {
 
-	for i := 0; i < max_worker_count; i++ {
-		wg.Add(1)
-		go renderline()
+		for h := 0; h < image_height; h++ {
+			q <- h
+		}
+
+		for i := 0; i < max_worker_count; i++ {
+			wg.Add(1)
+			go renderline()
+		}
+		wg.Wait()
+
+		fname := fmt.Sprintf("mandel-%03v.png", colorIndex)
+		out_file, _ := os.Create(fname)
+		png.Encode(out_file, sync_image.image)
+		colorIndex++
+		fmt.Println("der haex kann das mandeln nicht lassen...")
 	}
-	wg.Wait()
-	out_file, _ := os.Create("mandel.png")
-	png.Encode(out_file, sync_image.image)
 }
