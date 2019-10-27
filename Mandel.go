@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	top_left     = complex(-2, 1)
-	bottom_right = complex(1, -1)
+	//top_left     = complex(-2, 1)
+	//bottom_right = complex(1, -1)
 	image_width  = 1000
 	image_height = 1000
 	max_iter     = 1000
@@ -28,7 +28,36 @@ var (
 	q                        = make(chan int, image_height)
 	colorIndex       int
 	image_count      int = 100
+	r                    = &ComplexRectangle{center: complex(-0.6, 0.4),
+		width:  2,
+		height: 2}
 )
+
+type ComplexRectangle struct {
+	top_left     complex128
+	bottom_right complex128
+	center       complex128
+	width        float64
+	height       float64
+}
+
+func (r ComplexRectangle) Set(center complex128, width, height float64) {
+	r.center = center
+	r.width = width
+	r.height = height
+	//	r.calc()
+}
+
+func (r *ComplexRectangle) Scale(factor float64) {
+	r.width -= (r.width * factor)
+	r.height -= (r.height * factor)
+	r.Calc()
+}
+
+func (r *ComplexRectangle) Calc() {
+	r.top_left = complex(real(r.center)-r.width/2, imag(r.center)+r.height/2)
+	r.bottom_right = complex(real(r.center)+r.width/2, imag(r.center)-r.height/2)
+}
 
 type ComplexPoint struct {
 	z          complex128
@@ -91,9 +120,9 @@ func renderline() {
 
 		for w := 0; w < image_width; w++ {
 
-			real := linspace(real(top_left), real(bottom_right),
+			real := linspace(real(r.top_left), real(r.bottom_right),
 				image_width, w)
-			imag := linspace(imag(top_left), imag(bottom_right),
+			imag := linspace(imag(r.top_left), imag(r.bottom_right),
 				image_height, h)
 
 			z := complex(real, imag)
@@ -113,8 +142,15 @@ func renderline() {
 
 func main() {
 	fmt.Println("der haex kann das mandeln nicht lassen...")
+	fmt.Printf("%#v\n", r)
+	r.Calc()
+	fmt.Printf("%#v\n", r)
 
 	for x := 0; x < image_count; x++ {
+		fmt.Printf("%#v\n", r)
+		r.Scale(0.1)
+		r.Calc()
+		fmt.Printf("%#v\n", r)
 		fname := fmt.Sprintf("mandel-%03v.png", x)
 		fmt.Println("Generating image:" + fname)
 		for h := 0; h < image_height; h++ {
