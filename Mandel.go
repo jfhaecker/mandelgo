@@ -24,7 +24,7 @@ var (
 		})}
 	wg               sync.WaitGroup
 	bailout_radius   float64 = 200
-	max_worker_count         = 4
+	max_worker_count         = runtime.GOMAXPROCS(0)
 	q                        = make(chan int, image_height)
 	colorIndex       int
 	image_count      int = 100
@@ -112,22 +112,22 @@ func renderline() {
 }
 
 func main() {
-	fmt.Printf("runtime.GOMAXPROCS:%v\n", runtime.GOMAXPROCS(0))
 	fmt.Println("der haex kann das mandeln nicht lassen...")
 
 	for x := 0; x < image_count; x++ {
+		fname := fmt.Sprintf("mandel-%03v.png", x)
+		fmt.Println("Generating image:" + fname)
 		for h := 0; h < image_height; h++ {
 			q <- h
 		}
 
+		fmt.Printf("Starten %v workers for %v\n", max_worker_count, fname)
 		for i := 0; i < max_worker_count; i++ {
 			wg.Add(1)
 			go renderline()
 		}
 		wg.Wait()
 
-		fname := fmt.Sprintf("mandel-%03v.png", x)
-		fmt.Println("Generating image:" + fname)
 		out_file, _ := os.Create(fname)
 		png.Encode(out_file, sync_image.image)
 		colorIndex++
