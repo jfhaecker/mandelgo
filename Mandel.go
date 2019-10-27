@@ -27,7 +27,7 @@ var (
 	max_worker_count         = 4
 	q                        = make(chan int, image_height)
 	colorIndex       int
-	colorsN          int = 255
+	image_count      int = 100
 )
 
 type ComplexPoint struct {
@@ -38,7 +38,7 @@ type ComplexPoint struct {
 type SyncImage struct {
 	lock  *sync.Mutex
 	image *image.RGBA
-/}
+}
 
 func (l SyncImage) Set(x, y int, color color.Color) {
 	l.lock.Lock()
@@ -76,13 +76,12 @@ func mandelbrot(point *ComplexPoint) *ComplexPoint {
 
 func getColor(index int) color.RGBA {
 	//qu := quake[97 : 97+16]
-	qu := quake[0:colorsN]
+	qu := quake[0:128]
 	//	return qu[index%(len(qu)-1)]
-	return qu[(index+colorIndex)%(colorsN-1)]
+	return qu[(index+colorIndex)%len(qu)]
 }
 
 func renderline() {
-
 	h := 0
 	for {
 		if len(q) == 0 {
@@ -103,14 +102,11 @@ func renderline() {
 			if point.iterations == max_iter {
 				co = color.RGBA{255, 255, 255, 255}
 			} else {
-				c := uint8(colorIndex)
-				co = color.RGBA{c, 0, c,255}
-				// co = getColor(point.iterations)
+				co = getColor(point.iterations)
 				//co = color.RGBA{139, 139, 130, 255}
 			}
 			sync_image.Set(w, h, co)
 		}
-
 	}
 	wg.Done()
 }
@@ -119,8 +115,7 @@ func main() {
 	fmt.Printf("runtime.GOMAXPROCS:%v\n", runtime.GOMAXPROCS(0))
 	fmt.Println("der haex kann das mandeln nicht lassen...")
 
-	for x := 0; x < colorsN; x++ {
-
+	for x := 0; x < image_count; x++ {
 		for h := 0; h < image_height; h++ {
 			q <- h
 		}
@@ -131,10 +126,10 @@ func main() {
 		}
 		wg.Wait()
 
-		fname := fmt.Sprintf("mandel-%03v.png", colorIndex)
+		fname := fmt.Sprintf("mandel-%03v.png", x)
+		fmt.Println("Generating image:" + fname)
 		out_file, _ := os.Create(fname)
 		png.Encode(out_file, sync_image.image)
 		colorIndex++
-		fmt.Println("der haex kann das mandeln nicht lassen...")
 	}
 }
