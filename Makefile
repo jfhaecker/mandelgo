@@ -9,7 +9,7 @@ run:
 	./mandelgo
 
 video:
-	ffmpeg -y -i mandel-%09d.png -framerate 5 mandel.mp4
+	ffmpeg -y -i mandel-%03d.png -framerate 5 mandel.mp4
 
 play:
 	mpv -loop=inf mandel.mp4

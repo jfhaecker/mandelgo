@@ -24,12 +24,11 @@ var (
 	bailoutRadius  float64 = 200
 	maxWorkerCount         = runtime.GOMAXPROCS(0)
 	workerQueue            = make(chan int, imageHeight)
-	colorIndex     int
-	imageCount     int = 10000
+	imageCount     int     = 200
 
 	// Interesting Points/Coordinates:
 	// http://www.cuug.ab.ca/dewara/mandelbrot/Mandelbrowser.html
-	rectangle          = &ComplexRectangle{center: complex(-0.235125, 0.827215),
+	rectangle = &ComplexRectangle{center: complex(-0.235125, 0.827215),
 		//	r = &ComplexRectangle{center: complex(-0.74529, 0.113075),
 		width:  0.1,
 		height: 0.1}
@@ -56,8 +55,10 @@ func (r *ComplexRectangle) Scale(factor float64) {
 }
 
 func (r *ComplexRectangle) calc() {
-	r.topLeft = complex(real(r.center)-r.width/2, imag(r.center)+r.height/2)
-	r.bottomRight = complex(real(r.center)+r.width/2, imag(r.center)-r.height/2)
+	r.topLeft = complex(real(r.center)-r.width/2,
+		imag(r.center)+r.height/2)
+	r.bottomRight = complex(real(r.center)+r.width/2,
+		imag(r.center)-r.height/2)
 }
 
 type ComplexPoint struct {
@@ -103,7 +104,7 @@ func getColor(index int) color.RGBA {
 	//qu := quake[97 : 97+16]
 	qu := quake[0:255]
 	//	return qu[index%(len(qu)-1)]
-	return qu[(index+colorIndex)%len(qu)]
+	return qu[(index)%len(qu)]
 }
 
 func renderline() {
@@ -139,17 +140,17 @@ func renderline() {
 
 func main() {
 	fmt.Println("der haex kann das mandeln nicht lassen...")
+	fmt.Printf("Using %v workers for %v images\n", maxWorkerCount, imageCount)
 
 	for x := 0; x < imageCount; x++ {
 		rectangle.Scale(0.03)
-		fmt.Printf("%#v\n", rectangle)
 		fname := fmt.Sprintf("mandel-%03v.png", x)
-		fmt.Println("Generating image:" + fname)
+		fmt.Printf("[%v|%v|%v] -> %v\n",
+			rectangle.center, rectangle.height, rectangle.width, fname)
 		for h := 0; h < imageHeight; h++ {
 			workerQueue <- h
 		}
 
-		fmt.Printf("Starten %v workers for %v\n", maxWorkerCount, fname)
 		for i := 0; i < maxWorkerCount; i++ {
 			wg.Add(1)
 			go renderline()
