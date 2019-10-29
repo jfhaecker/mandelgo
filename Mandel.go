@@ -24,11 +24,12 @@ var (
 	bailoutRadius  float64 = 200
 	maxWorkerCount         = runtime.GOMAXPROCS(0)
 	workerQueue            = make(chan int, imageHeight)
-	imageCount     int     = 200
+	imageCount     int     = 2000
 
 	// Interesting Points/Coordinates:
 	// http://www.cuug.ab.ca/dewara/mandelbrot/Mandelbrowser.html
-	rectangle = &ComplexRectangle{center: complex(-0.235125, 0.827215),
+	//rectangle = &ComplexRectangle{center: complex(-0.235125, 0.827215),
+	rectangle = &ComplexRectangle{center: borgsHome,
 		//	r = &ComplexRectangle{center: complex(-0.74529, 0.113075),
 		width:  0.1,
 		height: 0.1}
