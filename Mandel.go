@@ -21,9 +21,10 @@ var (
 			image.Point{0, 0},
 			image.Point{imageWidth, imageHeight},
 		})}
-	bailoutRadius  float64 = 2000
-	maxWorkerCount         = runtime.GOMAXPROCS(0)
-	imageCount     int     = 500
+	bailoutRadius        float64 = 2000
+	maxMandelWorkerCount         = runtime.GOMAXPROCS(0)
+	maxImageWorkerCount          = 1
+	imageCount           int     = 500
 
 	// Interesting Points/Coordinates:
 	// http://www.cuug.ab.ca/dewara/mandelbrot/Mandelbrowser.html
@@ -64,6 +65,7 @@ func (r *ComplexRectangle) calc() {
 type ComplexPoint struct {
 	z          complex128
 	iterations int
+	x, y       int
 }
 
 type SyncImage struct {
@@ -75,6 +77,10 @@ func (l *SyncImage) Set(x, y int, color color.Color) {
 	l.Lock()
 	l.image.Set(x, y, color)
 	l.Unlock()
+}
+
+func (l *SyncImage) SetUnlocked(x, y int, color color.Color) {
+	l.image.Set(x, y, color)
 }
 
 func linspace(start, end float64, num int, i int) float64 {
@@ -101,47 +107,55 @@ func mandelbrot(point *ComplexPoint, maxIter int) *ComplexPoint {
 }
 
 func getColor(index int) color.RGBA {
-	//qu := quake[97 : 97+16]
 	qu := quake[0:255]
-	//	return qu[index%(len(qu)-1)]
 	return qu[(index)%len(qu)]
 }
 
-func renderline(jobs <-chan int, wg *sync.WaitGroup, maxIter int) {
+func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName string, maxIter int) {
 	defer wg.Done()
-	for line := range jobs {
+	for point := range points {
+		co := color.RGBA{0, 0, 0, 0}
+		if point.iterations == maxIter {
+			co = color.RGBA{255, 255, 255, 255}
+		} else {
+			co = getColor(point.iterations)
+		}
+		syncImage.SetUnlocked(point.x, point.y, co)
+	}
+	outFile, _ := os.Create(fileName)
+	png.Encode(outFile, syncImage.image)
+}
 
-		for w := 0; w < imageWidth; w++ {
-
+func renderline(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGroup, maxIter int) {
+	//fmt.Printf("renderline %v\n", len(jobs))
+	for y := range jobs {
+		for x := 0; x < imageWidth; x++ {
 			real := linspace(real(rectangle.topLeft),
 				real(rectangle.bottomRight),
-				imageWidth, w)
+				imageWidth, x)
 			imag := linspace(imag(rectangle.topLeft),
 				imag(rectangle.bottomRight),
-				imageHeight, line)
+				imageHeight, y)
 
 			z := complex(real, imag)
-			point := mandelbrot(&ComplexPoint{z: z}, maxIter)
-			co := color.RGBA{0, 0, 0, 0}
-			if point.iterations == maxIter {
-				co = color.RGBA{255, 255, 255, 255}
-			} else {
-				co = getColor(point.iterations)
-			}
-			syncImage.Set(w, line, co)
+			point := mandelbrot(&ComplexPoint{z: z, x: x, y: y}, maxIter)
+			result <- point
 		}
 	}
+	defer wg.Done()
 }
 
 func main() {
 	fmt.Println("der haex kann das mandeln nicht lassen...")
-	fmt.Printf("Using %v workers for %v images\n", maxWorkerCount, imageCount)
+	fmt.Printf("Using %v mandelworkers and %v imageworkers for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
 
 	maxIter := maxIterStart
-	var wg sync.WaitGroup
+	var wg1 sync.WaitGroup
+	var wg2 sync.WaitGroup
 
 	for x := 0; x < imageCount; x++ {
-		workerQueue := make(chan int, imageHeight)
+		mandelWorkerQ := make(chan int, imageHeight)
+		imageWorkerQ := make(chan *ComplexPoint, imageHeight*imageWidth)
 		t1 := time.Now()
 		rectangle.Scale(0.03)
 		fname := fmt.Sprintf("mandel-%03v.png", x)
@@ -149,22 +163,28 @@ func main() {
 		rectangle.center, rectangle.height,
 		rectangle.width, fname)*/
 
-		for i := 0; i < maxWorkerCount; i++ {
-			wg.Add(1)
-			go renderline(workerQueue, &wg, maxIter)
+		for i := 0; i < maxImageWorkerCount; i++ {
+			wg2.Add(1)
+			go renderImage(imageWorkerQ, &wg2, fname, maxIter)
+		}
+
+		for i := 0; i < maxMandelWorkerCount; i++ {
+			wg1.Add(1)
+			go renderline(mandelWorkerQ, imageWorkerQ,
+				&wg1, maxIter)
 		}
 
 		for h := 0; h < imageHeight; h++ {
-			workerQueue <- h
+			mandelWorkerQ <- h
 		}
-		close(workerQueue)
-
-		wg.Wait()
-		outFile, _ := os.Create(fname)
-		png.Encode(outFile, syncImage.image)
+		close(mandelWorkerQ)
+		wg1.Wait()
+		close(imageWorkerQ)
+		wg2.Wait()
 
 		fmt.Printf("%v took %v\n", fname, time.Since(t1))
-		/*if x%100 == 0 {
+		/*https://math.stackexchange.com/questions/16970/a-way-to-determine-the-ideal-number-of-maximum-iterations-for-an-arbitrary-zoom
+		if x%100 == 0 {
 			maxIter *= 10
 		}*/
 	}
