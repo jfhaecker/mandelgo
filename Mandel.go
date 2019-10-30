@@ -9,27 +9,26 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 )
 
 var (
-	imageWidth  = 1000
-	imageHeight = 1000
-	maxIter     = 1000
-	syncImage   = &SyncImage{
+	imageWidth   = 1000
+	imageHeight  = 1000
+	maxIterStart = 1000
+	syncImage    = &SyncImage{
 		image: image.NewRGBA(image.Rectangle{
 			image.Point{0, 0},
 			image.Point{imageWidth, imageHeight},
 		})}
-	wg             sync.WaitGroup
-	bailoutRadius  float64 = 200
+	bailoutRadius  float64 = 2000
 	maxWorkerCount         = runtime.GOMAXPROCS(0)
-	workerQueue            = make(chan int, imageHeight)
-	imageCount     int     = 2000
+	imageCount     int     = 500
 
 	// Interesting Points/Coordinates:
 	// http://www.cuug.ab.ca/dewara/mandelbrot/Mandelbrowser.html
-	//rectangle = &ComplexRectangle{center: complex(-0.235125, 0.827215),
-	rectangle = &ComplexRectangle{center: borgsHome,
+	rectangle = &ComplexRectangle{center: complex(-0.235125, 0.827215),
+		//	rectangle = &ComplexRectangle{center: borgsHome,
 		//	r = &ComplexRectangle{center: complex(-0.74529, 0.113075),
 		width:  0.1,
 		height: 0.1}
@@ -83,7 +82,7 @@ func linspace(start, end float64, num int, i int) float64 {
 	return start + (step * float64(i))
 }
 
-func mandelbrot(point *ComplexPoint) *ComplexPoint {
+func mandelbrot(point *ComplexPoint, maxIter int) *ComplexPoint {
 	c, zz := point.z, point.z
 	for iter := 1; ; iter++ {
 		zz = zz*zz + c
@@ -108,13 +107,9 @@ func getColor(index int) color.RGBA {
 	return qu[(index)%len(qu)]
 }
 
-func renderline() {
-	heightLine := 0
-	for {
-		if len(workerQueue) == 0 {
-			break
-		}
-		heightLine = <-workerQueue
+func renderline(jobs <-chan int, wg *sync.WaitGroup, maxIter int) {
+	defer wg.Done()
+	for line := range jobs {
 
 		for w := 0; w < imageWidth; w++ {
 
@@ -123,42 +118,55 @@ func renderline() {
 				imageWidth, w)
 			imag := linspace(imag(rectangle.topLeft),
 				imag(rectangle.bottomRight),
-				imageHeight, heightLine)
+				imageHeight, line)
 
 			z := complex(real, imag)
-			point := mandelbrot(&ComplexPoint{z: z})
+			point := mandelbrot(&ComplexPoint{z: z}, maxIter)
 			co := color.RGBA{0, 0, 0, 0}
 			if point.iterations == maxIter {
 				co = color.RGBA{255, 255, 255, 255}
 			} else {
 				co = getColor(point.iterations)
 			}
-			syncImage.Set(w, heightLine, co)
+			syncImage.Set(w, line, co)
 		}
 	}
-	wg.Done()
 }
 
 func main() {
 	fmt.Println("der haex kann das mandeln nicht lassen...")
 	fmt.Printf("Using %v workers for %v images\n", maxWorkerCount, imageCount)
 
+	maxIter := maxIterStart
+	var wg sync.WaitGroup
+
 	for x := 0; x < imageCount; x++ {
+		workerQueue := make(chan int, imageHeight)
+		t1 := time.Now()
 		rectangle.Scale(0.03)
 		fname := fmt.Sprintf("mandel-%03v.png", x)
-		fmt.Printf("[%v|%v|%v] -> %v\n",
-			rectangle.center, rectangle.height, rectangle.width, fname)
-		for h := 0; h < imageHeight; h++ {
-			workerQueue <- h
-		}
+		/*fmt.Printf("[%v|%v|%v|%v|] -> %v\n", maxIter,
+		rectangle.center, rectangle.height,
+		rectangle.width, fname)*/
 
 		for i := 0; i < maxWorkerCount; i++ {
 			wg.Add(1)
-			go renderline()
+			go renderline(workerQueue, &wg, maxIter)
 		}
-		wg.Wait()
 
+		for h := 0; h < imageHeight; h++ {
+			workerQueue <- h
+		}
+		close(workerQueue)
+
+		wg.Wait()
 		outFile, _ := os.Create(fname)
 		png.Encode(outFile, syncImage.image)
+
+		fmt.Printf("%v took %v\n", fname, time.Since(t1))
+		/*if x%100 == 0 {
+			maxIter *= 10
+		}*/
 	}
+
 }

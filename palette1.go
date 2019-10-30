@@ -2,6 +2,7 @@ package main
 
 import "image/color"
 
+//https://quakewiki.org/wiki/Quake_palette
 var quake = []color.RGBA{
 	color.RGBA{0, 0, 0, 255},
 	color.RGBA{15, 15, 15, 255},
