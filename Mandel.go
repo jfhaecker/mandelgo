@@ -23,7 +23,7 @@ var (
 		})}
 	bailoutRadius        float64 = 2000
 	maxMandelWorkerCount         = runtime.GOMAXPROCS(0)
-	maxImageWorkerCount          = 1
+	maxImageWorkerCount          = 1 // see SyncImage
 	imageCount           int     = 500
 
 	// Interesting Points/Coordinates:
@@ -73,7 +73,7 @@ type SyncImage struct {
 	image *image.RGBA
 }
 
-func (l *SyncImage) Set(x, y int, color color.Color) {
+func (l *SyncImage) SetLocked(x, y int, color color.Color) {
 	l.Lock()
 	l.image.Set(x, y, color)
 	l.Unlock()
@@ -107,7 +107,7 @@ func mandelbrot(point *ComplexPoint, maxIter int) *ComplexPoint {
 }
 
 func getColor(index int) color.RGBA {
-	qu := quake[0:255]
+	qu := quake2
 	return qu[(index)%len(qu)]
 }
 
@@ -126,8 +126,8 @@ func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName strin
 	png.Encode(outFile, syncImage.image)
 }
 
-func renderline(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGroup, maxIter int) {
-	//fmt.Printf("renderline %v\n", len(jobs))
+func renderMandel(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGroup, maxIter int) {
+	defer wg.Done()
 	for y := range jobs {
 		for x := 0; x < imageWidth; x++ {
 			real := linspace(real(rectangle.topLeft),
@@ -142,7 +142,6 @@ func renderline(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGroup
 			result <- point
 		}
 	}
-	defer wg.Done()
 }
 
 func main() {
@@ -150,12 +149,12 @@ func main() {
 	fmt.Printf("Using %v mandelworkers and %v imageworkers for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
 
 	maxIter := maxIterStart
-	var wg1 sync.WaitGroup
-	var wg2 sync.WaitGroup
 
 	for x := 0; x < imageCount; x++ {
 		mandelWorkerQ := make(chan int, imageHeight)
 		imageWorkerQ := make(chan *ComplexPoint, imageHeight*imageWidth)
+		var wg1 sync.WaitGroup
+		var wg2 sync.WaitGroup
 		t1 := time.Now()
 		rectangle.Scale(0.03)
 		fname := fmt.Sprintf("mandel-%03v.png", x)
@@ -170,7 +169,7 @@ func main() {
 
 		for i := 0; i < maxMandelWorkerCount; i++ {
 			wg1.Add(1)
-			go renderline(mandelWorkerQ, imageWorkerQ,
+			go renderMandel(mandelWorkerQ, imageWorkerQ,
 				&wg1, maxIter)
 		}
 
