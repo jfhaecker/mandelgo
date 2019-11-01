@@ -24,15 +24,7 @@ var (
 	bailoutRadius        float64 = 2000
 	maxMandelWorkerCount         = runtime.GOMAXPROCS(0)
 	maxImageWorkerCount          = 1 // see SyncImage
-	imageCount           int     = 500
-
-	// Interesting Points/Coordinates:
-	// http://www.cuug.ab.ca/dewara/mandelbrot/Mandelbrowser.html
-	rectangle = &ComplexRectangle{center: complex(-0.235125, 0.827215),
-		//	rectangle = &ComplexRectangle{center: borgsHome,
-		//	r = &ComplexRectangle{center: complex(-0.74529, 0.113075),
-		width:  0.1,
-		height: 0.1}
+	imageCount           int     = 5
 )
 
 type ComplexRectangle struct {
@@ -47,6 +39,7 @@ func (r *ComplexRectangle) Set(center complex128, width, height float64) {
 	r.center = center
 	r.width = width
 	r.height = height
+	r.calc()
 }
 
 func (r *ComplexRectangle) Scale(factor float64) {
@@ -126,7 +119,7 @@ func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName strin
 	png.Encode(outFile, syncImage.image)
 }
 
-func renderMandel(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGroup, maxIter int) {
+func renderMandel(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGroup, rectangle *ComplexRectangle, maxIter int) {
 	defer wg.Done()
 	for y := range jobs {
 		for x := 0; x < imageWidth; x++ {
@@ -149,6 +142,11 @@ func main() {
 	fmt.Printf("Using %v mandelworkers and %v imageworkers for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
 
 	maxIter := maxIterStart
+	start := locations[5]
+	rectangle := &ComplexRectangle{}
+	rectangle.Set(complex(start.X, start.Y), start.R, start.R)
+	//	rectangle = &ComplexRectangle{center: borgsHome,
+	//	r = &ComplexRectangle{center: complex(-0.74529, 0.113075),
 
 	for x := 0; x < imageCount; x++ {
 		mandelWorkerQ := make(chan int, imageHeight)
@@ -156,7 +154,6 @@ func main() {
 		var wg1 sync.WaitGroup
 		var wg2 sync.WaitGroup
 		t1 := time.Now()
-		rectangle.Scale(0.03)
 		fname := fmt.Sprintf("mandel-%03v.png", x)
 		/*fmt.Printf("[%v|%v|%v|%v|] -> %v\n", maxIter,
 		rectangle.center, rectangle.height,
@@ -170,7 +167,7 @@ func main() {
 		for i := 0; i < maxMandelWorkerCount; i++ {
 			wg1.Add(1)
 			go renderMandel(mandelWorkerQ, imageWorkerQ,
-				&wg1, maxIter)
+				&wg1, rectangle, maxIter)
 		}
 
 		for h := 0; h < imageHeight; h++ {
@@ -180,6 +177,8 @@ func main() {
 		wg1.Wait()
 		close(imageWorkerQ)
 		wg2.Wait()
+
+		rectangle.Scale(0.03)
 
 		fmt.Printf("%v took %v\n", fname, time.Since(t1))
 		/*https://math.stackexchange.com/questions/16970/a-way-to-determine-the-ideal-number-of-maximum-iterations-for-an-arbitrary-zoom
