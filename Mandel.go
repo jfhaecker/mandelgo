@@ -13,14 +13,9 @@ import (
 )
 
 var (
-	imageWidth   = 1000
-	imageHeight  = 1000
-	maxIterStart = 1000
-	syncImage    = &SyncImage{
-		image: image.NewRGBA(image.Rectangle{
-			image.Point{0, 0},
-			image.Point{imageWidth, imageHeight},
-		})}
+	imageWidth                   = 1000
+	imageHeight                  = 1000
+	maxIterStart                 = 1000
 	bailoutRadius        float64 = 2000
 	maxMandelWorkerCount         = runtime.GOMAXPROCS(0)
 	maxImageWorkerCount          = 1 // see SyncImage
@@ -100,11 +95,11 @@ func mandelbrot(point *ComplexPoint, maxIter int) *ComplexPoint {
 }
 
 func getColor(index int) color.RGBA {
-	qu := quake2
+	qu := quake
 	return qu[(index)%len(qu)]
 }
 
-func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName string, maxIter int) {
+func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName string, syncImage *SyncImage, maxIter int) {
 	defer wg.Done()
 	for point := range points {
 		co := color.RGBA{0, 0, 0, 0}
@@ -142,11 +137,14 @@ func main() {
 	fmt.Printf("Using %v mandelworkers and %v imageworkers for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
 
 	maxIter := maxIterStart
-	start := locations[5]
+	start := locations[0]
 	rectangle := &ComplexRectangle{}
 	rectangle.Set(complex(start.X, start.Y), start.R, start.R)
-	//	rectangle = &ComplexRectangle{center: borgsHome,
-	//	r = &ComplexRectangle{center: complex(-0.74529, 0.113075),
+
+	syncImage := &SyncImage{image: image.NewRGBA(image.Rectangle{
+		image.Point{0, 0},
+		image.Point{imageWidth, imageHeight},
+	})}
 
 	for x := 0; x < imageCount; x++ {
 		mandelWorkerQ := make(chan int, imageHeight)
@@ -161,7 +159,7 @@ func main() {
 
 		for i := 0; i < maxImageWorkerCount; i++ {
 			wg2.Add(1)
-			go renderImage(imageWorkerQ, &wg2, fname, maxIter)
+			go renderImage(imageWorkerQ, &wg2, fname, syncImage, maxIter)
 		}
 
 		for i := 0; i < maxMandelWorkerCount; i++ {
