@@ -176,7 +176,7 @@ func main() {
 	fmt.Printf("Using %v mandelworkers and %v imageworkers for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
 
 	maxIter := maxIterStart
-	start := locations[18]
+	start := locations[30]
 	rectangle := &ComplexRectangle{}
 	rectangle.Set(complex(start.X, start.Y), 0.1, 0.1)
 	//rectangle.Set(complex(0.0, 0.0), 4.0, 4.0)
