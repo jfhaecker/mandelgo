@@ -20,7 +20,9 @@ var (
 	bailoutRadius        float64 = 20
 	maxMandelWorkerCount         = runtime.GOMAXPROCS(0)
 	maxImageWorkerCount          = 1 // see SyncImage
-	imageCount           int     = 1000
+	imageCount           int     = 650
+	startLocation                = 18
+	scaleRatio                   = 0.03
 )
 
 type ComplexRectangle struct {
@@ -79,6 +81,8 @@ func linspace(start, end float64, num int, i int) float64 {
 	return start + (step * float64(i))
 }
 
+// https://linas.org/art-gallery/escape/escape.html
+// https://en.wikipedia.org/wiki/Mandelbrot_set#Continuous_.28smooth.29_coloring
 func mandelbrot(point *ComplexPoint, maxIter int) *ComplexPoint {
 	c, zz := point.z, point.z
 	for iter := 1; ; iter++ {
@@ -87,11 +91,8 @@ func mandelbrot(point *ComplexPoint, maxIter int) *ComplexPoint {
 		absz := cmplx.Abs(zz)
 
 		if absz > bailoutRadius {
-			// https://linas.org/art-gallery/escape/escape.html
 			log_zn := math.Log10(absz)
 			nu := math.Log10(log_zn/math.Log10(2)) / math.Log10(2)
-			// https://en.wikipedia.org/wiki/Mandelbrot_set#Continuous_.28smooth.29_coloring
-
 			point.normIterationCount = float64(float64(iter) + 1.0 - nu)
 			_, frac := math.Modf(point.normIterationCount)
 			point.frac = frac
@@ -123,6 +124,7 @@ func colorInterpolate(c1 color.RGBA, c2 color.RGBA, frac float64) color.RGBA {
 	return c
 }
 
+//https://en.wikipedia.org/wiki/Mandelbrot_set#Continuous_.28smooth.29_coloring
 func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName string, syncImage *SyncImage, maxIter int) {
 	defer wg.Done()
 	for point := range points {
@@ -131,21 +133,10 @@ func renderImage(points <-chan *ComplexPoint, wg *sync.WaitGroup, fileName strin
 			co = color.RGBA{0, 0, 0, 255}
 		} else {
 
-			// https://en.wikipedia.org/wiki/Mandelbrot_set#Continuous_.28smooth.29_coloring
 			c1 := getColor(int(math.Floor(point.normIterationCount)))
 			c2 := getColor(int(math.Floor(point.normIterationCount) + 1))
 
 			co = colorInterpolate(c1, c2, point.frac)
-			/*if point.x > 800 && point.x < 950 && point.y == 500 {
-				fmt.Println("hallo")
-				fmt.Printf("Color1%v Color2%v => %v\n", c1, c2, co)
-
-				fmt.Printf("%v %v %v %v %v \n", point.x, point.y,
-					point.iterationCount,
-					point.normIterationCount,
-					point.frac)
-
-			}*/
 		}
 		syncImage.SetUnlocked(point.x, point.y, co)
 	}
@@ -173,13 +164,12 @@ func renderMandel(jobs <-chan int, result chan<- *ComplexPoint, wg *sync.WaitGro
 
 func main() {
 	fmt.Println("der haex kann das mandeln nicht lassen...")
-	fmt.Printf("Using %v mandelworkers and %v imageworkers for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
+	fmt.Printf("Using %v imageworkers and %v mandelworkers  for %v images\n", maxImageWorkerCount, maxMandelWorkerCount, imageCount)
 
 	maxIter := maxIterStart
-	start := locations[30]
+	start := locations[startLocation]
 	rectangle := &ComplexRectangle{}
 	rectangle.Set(complex(start.X, start.Y), 0.1, 0.1)
-	//rectangle.Set(complex(0.0, 0.0), 4.0, 4.0)
 
 	syncImage := &SyncImage{image: image.NewRGBA(image.Rectangle{
 		image.Point{0, 0},
@@ -216,13 +206,14 @@ func main() {
 		close(imageWorkerQ)
 		wg2.Wait()
 
-		rectangle.Scale(0.03)
+		rectangle.Scale(scaleRatio)
 
 		fmt.Printf("%v took %v\n", fname, time.Since(t1))
-		/*https://math.stackexchange.com/questions/16970/a-way-to-determine-the-ideal-number-of-maximum-iterations-for-an-arbitrary-zoom
-		if x%100 == 0 {
-			maxIter *= 10
-		}*/
+
+		/*https://math.stackexchange.com/questions/16970/
+		a-way-to-determine-the-ideal-number-of-maximum-iterations-
+		for-an-arbitrary-zoom
+		*/
 	}
 
 }

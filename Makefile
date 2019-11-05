@@ -18,4 +18,3 @@ clean:
 	rm -f mandel-*.png
 	rm -f mandelgo
 
-.PHONY: video play all clean
