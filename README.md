@@ -1,6 +1,6 @@
 ![Alt text](img.png?raw=true "")
 # mandelgo
-A concurrent Mandelbrot image generator written in go. With some tools you can make your own psychodelic movie and conquer the Mandelbrot universe.
+A concurrent Mandelbrot image generator written in go. Make your own psychedelic movie and conquer the Mandelbrot universe.
 
 ## Getting started
 You need a go installation.
